@@ -1,14 +1,55 @@
 {% extends "layout.html" %}
 
-{% block title %}Register - Money Splitter{% endblock %}
+{% block title %}Register{% endblock %}
 
-{% block content %}
-    <h2>Register</h2>
-    <form action="{{ url_for('register') }}" method="POST">
-        <input type="text" name="name" placeholder="Full Name" required>
-        <input type="text" name="username" placeholder="Username" required>
-        <input type="password" name="password" placeholder="Password" required>
-        <button type="submit">Register</button>
-    </form>
-    <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+{% block main %}
+<section class="container-fluid">
+  <div class="row min-vh-100">
+    
+    <!-- Register Form -->
+    <div class="col-sm-6 d-flex align-items-center justify-content-center">
+      <form method="POST" class="w-100" style="max-width: 23rem;">
+        <h3 class="fw-normal mb-4">Register</h3>
+
+        <div class="mb-4">
+          <label for="fullname" class="form-label">Full Name</label>
+          <input type="text" name="fullname" id="fullname" placeholder="Name" class="form-control form-control-lg" required>
+        </div>
+
+        <div class="mb-4">
+          <label for="username" class="form-label">Username</label>
+          <input type="text" name="username" id="username" placeholder="Username" class="form-control form-control-lg" required>
+        </div>
+
+        <div class="mb-4">
+          <label for="password" class="form-label">Password</label>
+          <input type="password" name="password" id="password" placeholder="Password" class="form-control form-control-lg" required>
+        </div>
+
+        <div class="mb-4">
+          <label for="confirmation" class="form-label">Confirm Password</label>
+          <input type="password" name="confirmation" id="confirmation" placeholder="Password (Repeat)" class="form-control form-control-lg" required>
+        </div>
+
+        <div class="mb-4">
+          <button type="submit" class="btn btn-primary btn-lg w-100">Register</button>
+        </div>
+
+        <p class="text-center">
+          Already have an account? 
+          <a href="/login" class="link-light">Log in here</a>
+        </p>
+      </form>
+    </div>
+    
+    <!-- Image Side (now on the left) -->
+    <div class="col-sm-6 d-none d-sm-block px-0">
+      <img src="https://mdbcdn.b-cdn.net/img/Photos/new-templates/bootstrap-registration/img4.webp"
+           alt="Register image"
+           class="w-100 vh-100 object-fit-cover"
+           style="object-position: center;">
+    </div>
+
+  </div>
+</section>
 {% endblock %}

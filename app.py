@@ -1,21 +1,28 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_session import Session
+
+from models import db, User
+from helper import login_required
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///money_split.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'your_secret_key'  # Secret key for sessions
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_TYPE"] = "filesystem"
+Session(app)
 
-db = SQLAlchemy(app)
+db.init_app(app)
 
 # Function to execute raw SQL queries
 def execute_query(query, params=()):
     with db.engine.connect() as connection:
         return connection.execute(query, params)
 
-# Home Page (Only accessible if logged in)
+# Home Page
 @app.route('/')
+@login_required
 def index():
     if "user_id" not in session:
         flash("Please log in first!", "warning")
@@ -27,21 +34,28 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        name = request.form['name']
-        username = request.form['username']
-        password = request.form['password']
+        name = request.form.get('fullname')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirmation = request.form.get('confirmation')
 
-        # Hash the password
+        # Check if username exists
+        if User.query.filter_by(username=username).first():
+            flash("Username already exists. Try another one.", "danger")
+            return redirect("/register")
+
+        if password != confirmation:
+            flash("Passwords do not match.", "danger")
+            return redirect("/register")
+
         hashed_password = generate_password_hash(password)
 
-        # Insert user into database
-        try:
-            execute_query("INSERT INTO users (name, username, password) VALUES (?, ?, ?)",
-                          (name, username, hashed_password))
-            flash('Registration successful! You can now log in.', 'success')
-            return redirect(url_for('login'))
-        except:
-            flash("Username already exists. Try another one.", "danger")
+        new_user = User(name=name, username=username, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash("Registration successful! You can now log in.", "success")
+        return redirect("/login")
 
     return render_template('register.html')
 
@@ -49,16 +63,23 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form.get('username')
+        password = request.form.get('password')
 
-        user = execute_query("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if not username:
+            flash("Please enter username", "danger")
+            return redirect("/login")
+        if not password:
+            flash("Please enter password", "danger")
+            return redirect("/login")
 
-        if user and check_password_hash(user["password"], password):
-            session["user_id"] = user["id"]
-            session["username"] = user["username"]
+        user = User.query.filter_by(username=username).first()
+
+        if user and check_password_hash(user.password, password):
+            session["user_id"] = user.id
+            session["username"] = user.username
             flash("Login successful!", "success")
-            return redirect(url_for("home"))
+            return redirect("/")
         else:
             flash("Invalid username or password.", "danger")
 
@@ -66,6 +87,7 @@ def login():
 
 # Logout Route
 @app.route('/logout')
+@login_required
 def logout():
     session.clear()
     flash("You have been logged out.", "info")
@@ -82,6 +104,8 @@ def history():
     return redirect("/")
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(debug=True)
 
 
