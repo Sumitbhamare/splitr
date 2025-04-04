@@ -28,7 +28,13 @@ def index():
         flash("Please log in first!", "warning")
         return redirect("/login")
     
-    return render_template('home.html', username=session["username"])
+    user_id = session.get("user_id")
+
+    # Get all groups where the user is a member
+    user = User.query.get(user_id)
+    groups = user.groups  # via backref from group_members table
+
+    return render_template("index.html", groups=groups)
 
 # Register Route
 @app.route('/register', methods=['GET', 'POST'])
