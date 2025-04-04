@@ -6,3 +6,4 @@ flask_migrate
 flask_login
 flask_bcrypt
 requests
+flask-session
