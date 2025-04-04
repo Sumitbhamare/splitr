@@ -22,7 +22,7 @@
                         </div>
                         <div class="card-body">
                             <p class="card-text">Group ID: {{ group.id }}</p>
-                            <a href="/group/{{ group.id }}" class="btn btn-outline-info btn-sm">View Group</a>
+                            <a href="{{ url_for('group_page', group_id=group.id) }}" class="btn btn-outline-info btn-sm">View Group</a>
                         </div>
                     </div>
                 </div>

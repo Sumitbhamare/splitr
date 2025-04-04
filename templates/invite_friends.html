@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block title %}Invite Friends{% endblock %}
+
+{% block main %}
+<div class="container py-4" style="max-width: 600px;">
+    <h2 class="mb-3">Invite Friends to "{{ group.name }}"</h2>
+
+    {% if users %}
+    <form method="POST">
+        <div class="mb-3">
+            {% for user in users %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="{{ user.id }}" name="user_ids" id="user_{{ user.id }}">
+                    <label class="form-check-label" for="user_{{ user.id }}">
+                        {{ user.name }} ({{ user.username }})
+                    </label>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary">Send Invites</button>
+            <a href="/" class="btn btn-secondary">Skip</a>
+        </div>
+    </form>
+    {% else %}
+        <p>There are no other users to invite at the moment.</p>
+        <a href="{{ url_for('group_page', group_id=group.id) }}" class="btn btn-secondary">Back to Group</a>
+    {% endif %}
+</div>
+{% endblock %}

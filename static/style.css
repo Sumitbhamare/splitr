@@ -88,6 +88,10 @@ body {
     font-weight: 500;
 }
 
+.card-text {
+    color: var(--text-secondary);
+}
+
 /* Buttons */
 .btn-primary,
 .btn-danger,
