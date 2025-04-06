@@ -1,26 +1,28 @@
 {% extends "layout.html" %}
-{% block title %}Add Personal Expense{% endblock %}
+{% block title %}{{ 'Edit Transaction' if expense else 'Add Expense' }}{% endblock %}
 {% block main %}
 
 <div class="container content-container">
-  <h3 class="mb-4">Add Expense</h3>
+  <h3 class="mb-4">{{ 'Edit Transaction' if expense else 'Add Expense' }}</h3>
   <form method="POST">
 
     <div class="mb-3">
       <label for="description" class="form-label">Description</label>
-      <input type="text" class="form-control" name="description" required>
+      <input type="text" class="form-control" name="description" 
+      value="{{ expense.description if expense else '' }}" required>
     </div>
 
     <div class="mb-3">
       <label for="amount" class="form-label">Total Amount</label>
-      <input type="number" class="form-control" name="amount" id="amount" step="0.01" required>
+      <input type="number" class="form-control" name="amount" id="amount" step="0.01" 
+      value="{{ expense.amount if expense else '' }}" required>
     </div>
 
     <div class="mb-3">
       <label for="paid_by" class="form-label">Paid By</label>
       <select class="form-select" name="paid_by" id="paid_by" required>
         {% for user in users %}
-          <option value="{{ user.id }}" {% if user.id == session["user_id"] %}selected{% endif %}>
+          <option value="{{ user.id }}" {% if expense and expense.paid_by_id == user.id %}selected{% endif %}>
             {{ user.name.split(" ")[0] }}
           </option>
         {% endfor %}
@@ -32,11 +34,13 @@
     {% for user in users %}
       <div class="mb-2">
         <label>{{ user.name.split(' ')[0] }}'s Share</label>
-        <input type="number" step="0.01" name="user_{{ user.id }}" class="form-control split-input" value="0" required>
+        <input type="number" step="0.01" name="user_{{ user.id }}" 
+        value="{{ user_splits.get(user.id, '') if user_splits else '' }}" 
+        class="form-control split-input" value="0" required>
       </div>
     {% endfor %}
 
-    <button type="submit" class="btn btn-success mt-3">Add Expense</button>
+    <button type="submit" class="btn btn-success mt-3">{{ 'Update Expense' if expense else 'Add Expense' }}</button>
     <a href="{{ url_for('friend_page', friendship_id=friendship.id) }}" class="btn btn-secondary mt-3">Cancel</a>
 
   </form>

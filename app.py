@@ -545,6 +545,97 @@ def delete_group_expense(group_id, expense_id):
     return redirect(url_for("group_page", group_id=group_id))
 
 
+@app.route("/friend/<int:friend_id>/expense/<int:expense_id>/edit",
+           methods=["GET", "POST"])
+@login_required
+def edit_friend_expense(friend_id, expense_id):
+    friendship = Friendship.query.get_or_404(friend_id)
+    current_user_id = session["user_id"]
+
+    other_user = friendship.other_user(current_user_id)
+    users = [db.session.get(User, current_user_id), other_user]
+
+    # Get the expense to edit
+    expense = Expense.query.get_or_404(expense_id)
+
+    # Validate ownership of expense (optional security step)
+    involved_user_ids = [split.user_id for split in expense.splits]
+    if current_user_id not in involved_user_ids and \
+            expense.paid_by_id != current_user_id:
+        flash("You don't have access to edit this expense.", "danger")
+        return redirect(url_for("friend_page", friend_id=friend_id))
+
+    if request.method == "POST":
+        description = request.form.get("description")
+        amount = float(request.form.get("amount"))
+        paid_by_id = int(request.form.get("paid_by"))
+
+        # Update expense
+        expense.description = description
+        expense.amount = amount
+        expense.paid_by_id = paid_by_id
+
+        # Remove old splits
+        ExpenseSplit.query.filter_by(expense_id=expense.id).delete()
+
+        # Add new splits
+        total_split = 0
+        for user in users:
+            share = float(request.form.get(f"user_{user.id}", 0))
+            if share > 0:
+                split = ExpenseSplit(
+                    expense_id=expense.id,
+                    user_id=user.id,
+                    amount=share
+                )
+                db.session.add(split)
+                total_split += share
+
+        if round(total_split, 2) != round(amount, 2):
+            db.session.rollback()
+            flash("Split amounts must match total expense.", "danger")
+            return redirect(request.url)
+
+        db.session.commit()
+        flash("Expense updated successfully!", "success")
+        return redirect(url_for("friend_page", friendship_id=friend_id))
+
+    # Pre-fill user_splits
+    user_splits = {split.user_id: split.amount for split in expense.splits}
+
+    return render_template(
+        "add_personal_expense.html",
+        users=users,
+        friendship=friendship,
+        expense=expense,
+        user_splits=user_splits
+    )
+
+
+@app.route("/friend/<int:friend_id>/expense/<int:expense_id>/delete",
+           methods=["POST"])
+@login_required
+def delete_friend_expense(friend_id, expense_id):
+    expense = Expense.query.get_or_404(expense_id)
+
+    # Optional: Ensure current user has a link to the expense
+    current_user_id = session["user_id"]
+    involved = current_user_id == expense.paid_by_id or any(
+        split.user_id == current_user_id for split in expense.splits
+    )
+    if not involved:
+        flash("You cannot delete this expense.", "danger")
+        return redirect(url_for("friend_page", friend_id=friend_id))
+
+    # Delete splits first, then the expense
+    ExpenseSplit.query.filter_by(expense_id=expense.id).delete()
+    db.session.delete(expense)
+    db.session.commit()
+
+    flash("Expense deleted successfully.", "info")
+    return redirect(url_for("friend_page", friend_id=friend_id))
+
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
