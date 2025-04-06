@@ -14,9 +14,9 @@
 
     <!-- Outstanding balance -->
     {% if balance < 0 %}
-        <p class="text-danger-custom">You owe ₹{{ -balance | round(2) }}</p>
+        <p class="text-danger-custom">You owe {{ currency(-balance) }}</p>
     {% elif balance > 0 %}
-        <p class="text-success-custom">You are owed ₹{{ balance | round(2) }}</p>
+        <p class="text-success-custom">You are owed {{ currency(balance) }}</p>
     {% else %}
         <p class="text-secondary-custom">All settled up in this group!</p>
     {% endif %}
@@ -37,13 +37,13 @@
                         </div>
                         <div class="flex-grow-1 me-3">
                             <strong>{{ expense.description }}</strong><br>
-                            <small class="text-muted-custom">{{ payer_name }} paid ₹{{ "%.2f"|format(expense.amount) }}</small>
+                            <small class="text-muted-custom">{{ payer_name }} paid {{ currency(expense.amount) }}</small>
                         </div>
                         <div class="text-center me-3" style="white-space: nowrap;">
                             {% if is_payer %}
-                                <span class="badge bg-success rounded-pill px-3 py-2 fs-6">You are owed ₹{{ "%.2f"|format(expense.amount - you_owe) }}</span>
+                                <span class="badge bg-success rounded-pill px-3 py-2 fs-6">You are owed {{ currency(expense.amount - you_owe) }}</span>
                             {% else %}
-                                <span class="badge bg-danger rounded-pill px-3 py-2 fs-6">You owe ₹{{ "%.2f"|format(you_owe) }}</span>
+                                <span class="badge bg-danger rounded-pill px-3 py-2 fs-6">You owe {{ currency(you_owe) }}</span>
                             {% endif %}
                         </div>
                         <div class="row gx-2" style="min-width: 170px;">

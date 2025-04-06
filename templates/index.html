@@ -10,9 +10,9 @@
 
     <div class="mb-4">
         {% if net_balance < 0 %}
-            <p class="text-danger fs-5">You owe ₹{{ "%.2f"|format(-net_balance) }}</p>
+            <p class="text-danger fs-5">You owe {{ currency(-net_balance) }}</p>
         {% elif net_balance > 0 %}
-        <p class="text-success fs-5">You are owed ₹{{ "%.2f"|format(net_balance) }}</p>
+        <p class="text-success fs-5">You are owed {{ currency(net_balance) }}</p>
         {% else %}
             <p class="text-muted-custom fs-5">All settled up!</p>
         {% endif %}
@@ -35,9 +35,9 @@
                         <div class="card-body">                        
                             {% set balance = group_balances.get(group.id, 0) %}
                             {% if balance < 0 %}
-                                <p class="text-danger-custom">You owe ₹{{ -balance | round(2) }}</p>
+                                <p class="text-danger-custom">You owe {{ currency(-balance) }}</p>
                             {% elif balance > 0 %}
-                                <p class="text-success-custom">You are owed ₹{{ balance | round(2) }}</p>
+                                <p class="text-success-custom">You are owed {{ currency(balance) }}</p>
                             {% else %}
                                 <p class="text-muted-custom">All settled up</p>
                             {% endif %}                        
@@ -67,9 +67,9 @@
                     <div class="card-body">
                         {% set balance = friend_balances[friend.id] %}
                         {% if balance < 0 %}
-                            <p class="text-danger-custom">You owe ₹{{ -balance | round(2) }}</p>
+                            <p class="text-danger-custom">You owe {{ currency(-balance) }}</p>
                         {% elif balance > 0 %}
-                            <p class="text-success-custom">You are owed ₹{{ balance | round(2) }}</p>
+                            <p class="text-success-custom">You are owed {{ currency(balance) }}</p>
                         {% else %}
                             <p class="text-muted-custom">All settled up</p>
                         {% endif %}

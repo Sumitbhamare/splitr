@@ -5,7 +5,7 @@ from flask_session import Session
 
 from models import (
     db, User, Group, GroupMember, Expense, ExpenseSplit, Friendship)
-from helper import login_required
+from helper import login_required, currency
 import os
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -16,6 +16,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = \
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'your_secret_key'  # Secret key for sessions
 app.config["SESSION_PERMANENT"] = False
+app.config['DEFAULT_CURRENCY'] = 'USD'
+app.jinja_env.globals.update(currency=currency)
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
@@ -31,6 +33,7 @@ def execute_query(query, params=()):
 @app.route('/')
 @login_required
 def index():
+    """Homepage of the website"""
     if "user_id" not in session:
         flash("Please log in first!", "warning")
         return redirect("/login")
@@ -106,9 +109,9 @@ def index():
     )
 
 
-# Register Route
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    """Register a new user"""
     if request.method == 'POST':
         name = request.form.get('fullname')
         username = request.form.get('username')
@@ -136,9 +139,9 @@ def register():
     return render_template('register.html')
 
 
-# Login Route
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """Login page for existing users"""
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -163,10 +166,10 @@ def login():
     return render_template('login.html')
 
 
-# Logout Route
 @app.route('/logout')
 @login_required
 def logout():
+    """Logout the user"""
     session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for("login"))
@@ -174,6 +177,7 @@ def logout():
 
 @app.route("/profile", methods=["GET", "POST"])
 def profile():
+    """User profile page. Allows password change."""
     if "user_id" not in session:
         flash("You must be logged in to access this page.", "warning")
         return redirect(url_for("login"))
@@ -213,6 +217,7 @@ def profile():
 @app.route('/create_group', methods=['GET', 'POST'])
 @login_required
 def create_group():
+    """Create a new group"""
     if request.method == 'POST':
         group_name = request.form.get('group_name')
         current_user_id = session.get('user_id')
@@ -241,6 +246,7 @@ def create_group():
 @app.route("/create_friend", methods=["GET", "POST"])
 @login_required
 def create_friend():
+    """Create a new group with another user"""
     current_user_id = session["user_id"]
     all_users = User.query.filter(User.id != current_user_id).all()
 
@@ -285,6 +291,7 @@ def create_friend():
 @app.route('/invite-friends/<int:group_id>', methods=['GET', 'POST'])
 @login_required
 def invite_friends(group_id):
+    """Invite friends to a group"""
     group = Group.query.get_or_404(group_id)
 
     # Get current members (so they aren't re-added)
@@ -311,6 +318,7 @@ def invite_friends(group_id):
 @app.route('/group/<int:group_id>')
 @login_required
 def group_page(group_id):
+    """Group page showing expenses and balance"""
     group = Group.query.get_or_404(group_id)
 
     # Ensure current user is a member
@@ -339,6 +347,7 @@ def group_page(group_id):
 @app.route("/friend/<int:friendship_id>")
 @login_required
 def friend_page(friendship_id):
+    """Friendship page showing expenses and balance"""
     friendship = Friendship.query.get_or_404(friendship_id)
     current_user_id = session["user_id"]
 
@@ -384,6 +393,7 @@ def friend_page(friendship_id):
 
 @app.route("/group/<int:group_id>/add_expense", methods=["GET", "POST"])
 def add_group_expense(group_id):
+    """Add an expense to a group"""
     group = Group.query.get_or_404(group_id)
     members = GroupMember.query.filter_by(group_id=group_id).all()
     users = [db.session.get(User, member.user_id) for member in members]
@@ -427,6 +437,7 @@ def add_group_expense(group_id):
 @app.route("/friend/<int:friendship_id>/add_expense", methods=["GET", "POST"])
 @login_required
 def add_friend_expense(friendship_id):
+    """Add an expense between two friends"""
     friendship = Friendship.query.get_or_404(friendship_id)
     current_user_id = session["user_id"]
 
@@ -475,6 +486,7 @@ def add_friend_expense(friendship_id):
 @app.route("/history")
 @login_required
 def activity():
+    """View all transactions (both paid and owed)"""
     user_id = session.get("user_id")
 
     expenses = Expense.query.filter(
@@ -524,6 +536,7 @@ def activity():
            methods=["GET", "POST"])
 @login_required
 def edit_group_expense(group_id, expense_id):
+    """Edit an existing group expense"""
     group = Group.query.get_or_404(group_id)
     expense = Expense.query.get_or_404(expense_id)
     members = GroupMember.query.filter_by(group_id=group_id).all()
@@ -572,6 +585,7 @@ def edit_group_expense(group_id, expense_id):
            methods=["POST"])
 @login_required
 def delete_group_expense(group_id, expense_id):
+    """Delete an expense from a group"""
     expense = Expense.query.get_or_404(expense_id)
 
     # Delete splits first (due to FK constraints)
@@ -587,6 +601,7 @@ def delete_group_expense(group_id, expense_id):
            methods=["GET", "POST"])
 @login_required
 def edit_friend_expense(friend_id, expense_id):
+    """Edit an existing personal expense"""
     friendship = Friendship.query.get_or_404(friend_id)
     current_user_id = session["user_id"]
 
@@ -654,6 +669,7 @@ def edit_friend_expense(friend_id, expense_id):
            methods=["POST"])
 @login_required
 def delete_friend_expense(friend_id, expense_id):
+    """Delete an expense between friends"""
     expense = Expense.query.get_or_404(expense_id)
 
     # Optional: Ensure current user has a link to the expense

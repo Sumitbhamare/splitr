@@ -14,10 +14,10 @@
                             <h5 class="mb-1">{{ txn.description }}</h5>
                             <p class="mb-1">
                                 {% if txn.owed_amount > 0 %}
-                                    <span class="text-success">You are owed ₹{{ txn.owed_amount | round(2) }}</span> 
+                                    <span class="text-success">You are owed {{ currency(txn.owed_amount) }}</span> 
                                     from <strong>{{ txn.counterparty_name }}</strong>
                                 {% elif txn.owed_amount < 0 %}
-                                    <span class="text-danger">You owe ₹{{ -txn.owed_amount | round(2) }}</span> 
+                                    <span class="text-danger">You owe {{ currency(-txn.owed_amount) }}</span> 
                                     to <strong>{{ txn.counterparty_name }}</strong>
                                 {% else %}
                                     <span class="text-muted">Settled</span>
