@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+{% block title %}Activity{% endblock %}
+
+{% block main %}
+<div class="container py-4">
+    <h2 class="mb-4">Your Activity</h2>
+
+    {% if expenses %}
+        <ul class="list-unstyled">
+            {% for expense in expenses %}
+                {% set is_payer = expense.paid_by_id == user_id %}
+                {% set user_split = expense.splits | selectattr("user_id", "equalto", user_id) | list %}
+                {% set you_owe = user_split[0].amount if user_split else 0 %}
+
+                <li class="mb-4 p-3 rounded" style="background-color: var(--dark-tertiary);">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ expense.description }}</strong><br>
+                            {% if is_payer %}
+                                <span class="text-success-custom">
+                                    You paid ₹{{ "%.2f"|format(expense.amount) }}
+                                </span>
+                            {% else %}
+                                <span class="text-danger-custom">
+                                    You owe ₹{{ "%.2f"|format(you_owe) }} to {{ expense.payer.name }}
+                                </span>
+                            {% endif %}
+                            {% if expense.group %}
+                                <div class="text-muted-custom small">Group: {{ expense.group.name }}</div>
+                            {% else %}
+                                <div class="text-muted-custom small">Non-group Expense</div>
+                            {% endif %}
+                        </div>
+                        <small class="text-secondary">
+                            {{ expense.timestamp.strftime('%b %d, %Y %I:%M %p') }}
+                        </small>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <div class="alert alert-info">No activity yet. Add or split an expense to see it here!</div>
+    {% endif %}
+</div>
+{% endblock %}

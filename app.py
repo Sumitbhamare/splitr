@@ -194,7 +194,7 @@ def group_page(group_id):
         for split in expense.splits:
             if split.user_id == current_user_id:
                 balance -= split.amount
-        if expense.payer_id == current_user_id:
+        if expense.paid_by_id == current_user_id:
             balance += expense.amount
 
     return render_template("group.html", group=group, expenses=expenses, balance=balance)
@@ -204,7 +204,7 @@ def group_page(group_id):
 def add_group_expense(group_id):
     group = Group.query.get_or_404(group_id)
     members = GroupMember.query.filter_by(group_id=group_id).all()
-    users = [User.query.get(member.user_id) for member in members]
+    users = [db.session.get(User, member.user_id) for member in members]
 
     if request.method == "POST":
         description = request.form.get("description")
@@ -212,7 +212,7 @@ def add_group_expense(group_id):
         payer_id = session["user_id"]
 
         # Create Expense record
-        expense = Expense(description=description, amount=amount, payer_id=payer_id, group_id=group_id)
+        expense = Expense(description=description, amount=amount, paid_by_id=payer_id, group_id=group_id)
         db.session.add(expense)
         db.session.flush() 
 
@@ -220,7 +220,7 @@ def add_group_expense(group_id):
         for user in users:
             share = float(request.form.get(f"user_{user.id}", 0))
             if share > 0:
-                split = ExpenseSplit(expense_id=expense.id, user_id=user.id, amount_owed=share)
+                split = ExpenseSplit(expense_id=expense.id, user_id=user.id, amount=share)
                 db.session.add(split)
                 total_split += share
 
@@ -231,7 +231,7 @@ def add_group_expense(group_id):
 
         db.session.commit()
         flash("Expense added successfully!", "success")
-        return redirect(url_for("view_group", group_id=group_id))
+        return redirect(url_for("group_page", group_id=group_id))
 
     return render_template("add_group_expense.html", group=group, users=users)
 
@@ -277,9 +277,26 @@ def add_personal_expense():
     return render_template("add_personal_expense.html", users=users)
 
 
-# @app.route('/history')
-# def history():
-#     return redirect("/")
+@app.route('/history')
+@login_required
+def activity():
+    user_id = session["user_id"]
+
+    # Expenses paid by user
+    paid_expenses = Expense.query.filter_by(paid_by_id=user_id).all()
+
+    # Expenses where user owes (in splits)
+    split_ids = db.session.query(ExpenseSplit.expense_id).filter_by(user_id=user_id).distinct()
+    split_expenses = Expense.query.filter(Expense.id.in_(split_ids)).all()
+
+    # Combine and remove duplicates
+    all_expenses = {exp.id: exp for exp in paid_expenses + split_expenses}.values()
+
+    # Sort by timestamp descending
+    sorted_expenses = sorted(all_expenses, key=lambda e: e.timestamp, reverse=True)
+
+    return render_template("activity.html", expenses=sorted_expenses, user_id=user_id)
+
 
 if __name__ == '__main__':
     with app.app_context():
