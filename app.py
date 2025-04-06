@@ -482,6 +482,69 @@ def activity():
     return render_template("activity.html", transactions=transactions)
 
 
+@app.route("/group/<int:group_id>/edit_expense/<int:expense_id>",
+           methods=["GET", "POST"])
+@login_required
+def edit_group_expense(group_id, expense_id):
+    group = Group.query.get_or_404(group_id)
+    expense = Expense.query.get_or_404(expense_id)
+    members = GroupMember.query.filter_by(group_id=group_id).all()
+    users = [db.session.get(User, member.user_id) for member in members]
+
+    if request.method == "POST":
+        expense.description = request.form.get("description")
+        expense.amount = float(request.form.get("amount"))
+        expense.paid_by_id = int(request.form.get("paid_by"))
+
+        # Delete old splits
+        ExpenseSplit.query.filter_by(expense_id=expense.id).delete()
+
+        # Add updated splits
+        total_split = 0
+        for user in users:
+            share = float(request.form.get(f"user_{user.id}", 0))
+            if share > 0:
+                split = ExpenseSplit(
+                    expense_id=expense.id, user_id=user.id, amount=share)
+                db.session.add(split)
+                total_split += share
+
+        if round(total_split, 2) != round(expense.amount, 2):
+            db.session.rollback()
+            flash("Split amounts must equal the total expense.", "danger")
+            return redirect(request.url)
+
+        db.session.commit()
+        flash("Expense updated successfully!", "success")
+        return redirect(url_for("group_page", group_id=group_id))
+
+    # Prefill form
+    user_splits = {split.user_id: split.amount for split in expense.splits}
+
+    return render_template(
+        "add_group_expense.html",
+        group=group,
+        users=users,
+        expense=expense,
+        user_splits=user_splits
+    )
+
+
+@app.route("/group/<int:group_id>/delete_expense/<int:expense_id>",
+           methods=["POST"])
+@login_required
+def delete_group_expense(group_id, expense_id):
+    expense = Expense.query.get_or_404(expense_id)
+
+    # Delete splits first (due to FK constraints)
+    ExpenseSplit.query.filter_by(expense_id=expense.id).delete()
+    db.session.delete(expense)
+    db.session.commit()
+
+    flash("Expense deleted successfully!", "success")
+    return redirect(url_for("group_page", group_id=group_id))
+
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
