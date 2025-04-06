@@ -1,41 +1,39 @@
 {% extends "layout.html" %}
-{% block title %}{{ group.name }}{% endblock %}
+{% block title %}{{ other_user.name }}{% endblock %}
 
 {% block main %}
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>{{ group.name }}</h2>
+        <h2>{{ other_user.name }}</h2>
         <div>
             <a href="/" class="btn btn-outline-secondary">← Back to Dashboard</a>
-            <a href="{{ url_for('invite_friends', group_id=group.id) }}" class="btn btn-outline-info me-2">+ Invite Friends</a>
-            <a href="{{ url_for('add_group_expense', group_id=group.id) }}" class="btn btn-success">+ Add Expense</a>
+            <a href="{{ url_for('add_friend_expense', friendship_id=friendship.id) }}" class="btn btn-success">+ Add Expense</a>
         </div>
     </div>
 
-    <!-- Outstanding balance -->
     {% if balance < 0 %}
         <p class="text-danger-custom">You owe ₹{{ -balance | round(2) }}</p>
     {% elif balance > 0 %}
         <p class="text-success-custom">You are owed ₹{{ balance | round(2) }}</p>
     {% else %}
-        <p class="text-secondary-custom">All settled up in this group!</p>
+        <p class="text-muted-custom">All settled up!</p>
     {% endif %}
 
-    <h5>Expenses</h5>
+    <h5>Transactions</h5>
     {% if expenses %}
         <ul class="list-group">
             {% for expense in expenses %}
-                <li class="list-group-item d-flex justify-content-between align-items-center bg-secondary text-light">
+                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
                     <div>
                         <strong>{{ expense.description }}</strong> — ₹{{ expense.amount }}
                         <br>
-                        <small>Added by {{ expense.paid_by_id }} on {{ expense.timestamp.strftime('%b %d, %Y') }}</small>
+                        <small>Paid by {{ expense.paid_by.name }} on {{ expense.timestamp.strftime('%b %d, %Y') }}</small>
                     </div>
                 </li>
             {% endfor %}
         </ul>
     {% else %}
-        <p class="text-muted-custom">No expenses added yet.</p>
+        <p class="text-muted-custom">No expenses yet.</p>
     {% endif %}
 </div>
 {% endblock %}

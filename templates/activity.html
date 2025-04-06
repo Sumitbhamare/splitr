@@ -5,41 +5,37 @@
 <div class="container py-4">
     <h2 class="mb-4">Your Activity</h2>
 
-    {% if expenses %}
-        <ul class="list-unstyled">
-            {% for expense in expenses %}
-                {% set is_payer = expense.paid_by_id == user_id %}
-                {% set user_split = expense.splits | selectattr("user_id", "equalto", user_id) | list %}
-                {% set you_owe = user_split[0].amount if user_split else 0 %}
-
-                <li class="mb-4 p-3 rounded" style="background-color: var(--dark-tertiary);">
-                    <div class="d-flex justify-content-between align-items-center">
+    {% if transactions %}
+        <div class="list-group">
+            {% for txn in transactions %}
+                <div class="mb-4 p-3 rounded" style="background-color: var(--dark-tertiary);">
+                    <div class="d-flex justify-content-between">
                         <div>
-                            <strong>{{ expense.description }}</strong><br>
-                            {% if is_payer %}
-                                <span class="text-success-custom">
-                                    You paid ₹{{ "%.2f"|format(expense.amount) }}
-                                </span>
-                            {% else %}
-                                <span class="text-danger-custom">
-                                    You owe ₹{{ "%.2f"|format(you_owe) }} to {{ expense.payer.name }}
-                                </span>
-                            {% endif %}
-                            {% if expense.group %}
-                                <div class="text-muted-custom small">Group: {{ expense.group.name }}</div>
-                            {% else %}
-                                <div class="text-muted-custom small">Non-group Expense</div>
-                            {% endif %}
+                            <h5 class="mb-1">{{ txn.description }}</h5>
+                            <p class="mb-1">
+                                {% if txn.owed_amount > 0 %}
+                                    <span class="text-success">You are owed ₹{{ txn.owed_amount | round(2) }}</span> 
+                                    from <strong>{{ txn.counterparty_name }}</strong>
+                                {% elif txn.owed_amount < 0 %}
+                                    <span class="text-danger">You owe ₹{{ -txn.owed_amount | round(2) }}</span> 
+                                    to <strong>{{ txn.counterparty_name }}</strong>
+                                {% else %}
+                                    <span class="text-muted">Settled</span>
+                                {% endif %}
+                            </p>
+                            <small class="text-muted-custom">
+                                {{ txn.timestamp.strftime('%b %d, %Y %I:%M %p') }}
+                            </small>
                         </div>
-                        <small class="text-secondary">
-                            {{ expense.timestamp.strftime('%b %d, %Y %I:%M %p') }}
-                        </small>
+                        <div class="text-end">
+                            <span class="badge bg-secondary">{{ txn.group_name if txn.group_name else "Personal" }}</span>
+                        </div>
                     </div>
-                </li>
+                </div>
             {% endfor %}
-        </ul>
+        </div>
     {% else %}
-        <div class="alert alert-info">No activity yet. Add or split an expense to see it here!</div>
+        <div class="alert alert-secondary">No transactions yet!</div>
     {% endif %}
 </div>
 {% endblock %}

@@ -30,6 +30,7 @@ class Expense(db.Model):
     group_id = db.Column(db.Integer, db.ForeignKey("groups.id"), nullable=True)  # Optional
     timestamp = db.Column(db.DateTime, default=datetime.now)
     splits = db.relationship("ExpenseSplit", backref="expense", lazy=True)
+    paid_by = db.relationship("User", foreign_keys=[paid_by_id]) 
 
 class ExpenseSplit(db.Model):
     __tablename__ = "expense_split"
@@ -37,5 +38,22 @@ class ExpenseSplit(db.Model):
     expense_id = db.Column(db.Integer, db.ForeignKey("expenses.id"))
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
     amount = db.Column(db.Float)
+
+class Friendship(db.Model):
+    __tablename__ = "friendships"
+    id = db.Column(db.Integer, primary_key=True)
+    user1_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    user2_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user1 = db.relationship("User", foreign_keys=[user1_id], backref="friends_initiated")
+    user2 = db.relationship("User", foreign_keys=[user2_id], backref="friends_received")
+
+    def involves_user(self, user_id):
+        return self.user1_id == user_id or self.user2_id == user_id
+
+    def other_user(self, current_user_id):
+        return self.user2 if self.user1_id == current_user_id else self.user1
+
 
 

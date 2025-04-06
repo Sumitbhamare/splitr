@@ -3,7 +3,8 @@ from flask import request, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_session import Session
 
-from models import db, User, Group, GroupMember, Expense, ExpenseSplit
+from models import (
+    db, User, Group, GroupMember, Expense, ExpenseSplit, Friendship)
 from helper import login_required
 import os
 
@@ -37,39 +38,71 @@ def index():
     user_id = session.get("user_id")
     user = User.query.get(user_id)
 
+    # GROUPS SECTION
     groups = user.groups
-
-    # Calculate overall balance
-    expenses = Expense.query.all()  # Get all expenses (group + non-group)
     net_balance = 0.0
-    for expense in expenses:
-        # Subtract user's share (what they owe)
-        for split in expense.splits:
-            if split.user_id == user_id:
-                net_balance -= split.amount
-        # Add full expense if user paid
-        if expense.paid_by_id == user_id:
-            net_balance += expense.amount
-
     group_balances = {}
+
     for group in groups:
         expenses = Expense.query.filter_by(group_id=group.id).all()
         balance = 0.0
         for expense in expenses:
-            # Subtract user's share (what they owe)
             for split in expense.splits:
                 if split.user_id == user_id:
                     balance -= split.amount
-            # Add full expense if the user paid for it
             if expense.paid_by_id == user_id:
                 balance += expense.amount
         group_balances[group.id] = balance
+        net_balance += balance
+
+    # FRIENDS SECTION
+    friendships = Friendship.query.filter(
+        (Friendship.user1_id == user_id) | (Friendship.user2_id == user_id)
+    ).all()
+
+    friends = []
+    friend_balances = {}
+    friendship_ids = {}
+
+    for friendship in friendships:
+        other = friendship.other_user(user_id)
+        friends.append(other)
+        friendship_ids[other.id] = friendship.id
+
+        # Get personal (non-group) expenses involving both users
+        expenses = (
+            Expense.query
+            .filter_by(group_id=None)
+            .filter(
+                (Expense.paid_by_id == user_id) |
+                (Expense.paid_by_id == other.id)
+            )
+            .order_by(Expense.timestamp.desc())
+            .all()
+        )
+
+        # Filter to expenses involving both
+        balance = 0.0
+        for expense in expenses:
+            user_ids = {split.user_id for split in expense.splits}
+            if {user_id, other.id}.issubset(user_ids):
+                for split in expense.splits:
+                    if split.user_id == user_id:
+                        balance -= split.amount
+                if expense.paid_by_id == user_id:
+                    balance += expense.amount
+
+        friend_balances[other.id] = balance
+        net_balance += balance
 
     return render_template(
         "index.html",
         groups=groups,
         net_balance=net_balance,
-        group_balances=group_balances
+        group_balances=group_balances,
+        friends=friends,
+        friend_balances=friend_balances,
+        friendship_ids=friendship_ids,
     )
 
 
@@ -139,7 +172,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route('/create-group', methods=['GET', 'POST'])
+@app.route('/create_group', methods=['GET', 'POST'])
 @login_required
 def create_group():
     if request.method == 'POST':
@@ -165,6 +198,50 @@ def create_group():
         return redirect("/")
 
     return render_template('create_group.html')
+
+
+@app.route("/create_friend", methods=["GET", "POST"])
+@login_required
+def create_friend():
+    current_user_id = session["user_id"]
+    all_users = User.query.filter(User.id != current_user_id).all()
+
+    # Get existing friendships
+    existing_friend_ids = set()
+    for f in Friendship.query.all():
+        if f.user1_id == current_user_id:
+            existing_friend_ids.add(f.user2_id)
+        elif f.user2_id == current_user_id:
+            existing_friend_ids.add(f.user1_id)
+
+    # Filter out already-friends
+    available_users = [u for u in all_users if u.id not in existing_friend_ids]
+
+    if request.method == "POST":
+        selected_id = int(request.form.get("friend_id"))
+
+        # Prevent duplicate
+        already_friends = Friendship.query.filter(
+            ((Friendship.user1_id == current_user_id) &
+             (Friendship.user2_id == selected_id)) |
+            ((Friendship.user1_id == selected_id) &
+             (Friendship.user2_id == current_user_id))
+        ).first()
+
+        if already_friends:
+            flash("You're already friends with this user.", "warning")
+            return redirect("/")
+
+        new_friendship = Friendship(
+            user1_id=current_user_id, user2_id=selected_id)
+        db.session.add(new_friendship)
+        db.session.commit()
+
+        flash("Friend added successfully!", "success")
+        return redirect(
+            url_for('friend_page', friendship_id=new_friendship.id))
+
+    return render_template("create_friend.html", users=available_users)
 
 
 @app.route('/invite-friends/<int:group_id>', methods=['GET', 'POST'])
@@ -221,6 +298,52 @@ def group_page(group_id):
         "group.html", group=group, expenses=expenses, balance=balance)
 
 
+@app.route("/friend/<int:friendship_id>")
+@login_required
+def friend_page(friendship_id):
+    friendship = Friendship.query.get_or_404(friendship_id)
+    current_user_id = session["user_id"]
+
+    # Ensure access
+    if not friendship.involves_user(current_user_id):
+        flash("You do not have access to this friend.", "danger")
+        return redirect("/")
+    other_user = friendship.other_user(current_user_id)
+
+    expenses = (
+        Expense.query
+        .filter_by(group_id=None)
+        .filter(
+            (Expense.paid_by_id == current_user_id) |
+            (Expense.paid_by_id == other_user.id)
+        )
+        .order_by(Expense.timestamp.desc())
+        .all()
+    )
+
+    # Filter to expenses involving both users
+    filtered_expenses = []
+    balance = 0.0
+
+    for expense in expenses:
+        user_ids_involved = {split.user_id for split in expense.splits}
+        if {current_user_id, other_user.id}.issubset(user_ids_involved):
+            filtered_expenses.append(expense)
+            for split in expense.splits:
+                if split.user_id == current_user_id:
+                    balance -= split.amount
+            if expense.paid_by_id == current_user_id:
+                balance += expense.amount
+
+    return render_template(
+        "friend.html",
+        friendship=friendship,
+        other_user=other_user,
+        expenses=filtered_expenses,
+        balance=balance,
+    )
+
+
 @app.route("/group/<int:group_id>/add_expense", methods=["GET", "POST"])
 def add_group_expense(group_id):
     group = Group.query.get_or_404(group_id)
@@ -263,81 +386,100 @@ def add_group_expense(group_id):
     return render_template("add_group_expense.html", group=group, users=users)
 
 
-@app.route("/add-personal-expense", methods=["GET", "POST"])
-def add_personal_expense():
-    current_user_id = session.get("user_id")
-    if not current_user_id:
-        flash("Please log in first.", "danger")
-        return redirect("/login")
+@app.route("/friend/<int:friendship_id>/add_expense", methods=["GET", "POST"])
+@login_required
+def add_friend_expense(friendship_id):
+    friendship = Friendship.query.get_or_404(friendship_id)
+    current_user_id = session["user_id"]
 
-    users = User.query.filter(User.id != current_user_id).all()
+    if not friendship.involves_user(current_user_id):
+        flash("Unauthorized", "danger")
+        return redirect("/")
+
+    other_user = friendship.other_user(current_user_id)
+    users = [db.session.get(User, current_user_id), other_user]
 
     if request.method == "POST":
         description = request.form.get("description")
         amount = float(request.form.get("amount"))
-        other_user_id = int(request.form.get("other_user_id"))
-        payer_id = current_user_id
+        payer_id = int(request.form.get("paid_by"))
 
-        try:
-            payer_share = float(request.form.get("payer_share"))
-            other_share = float(request.form.get("other_share"))
-        except (ValueError, TypeError):
-            flash("Please enter valid share values.", "danger")
-            return redirect(request.url)
-
-        if round(payer_share + other_share, 2) != round(amount, 2):
-            flash("The split amounts must total the expense amount.", "danger")
-            return redirect(request.url)
-
-        # Create personal expense (no group_id)
         expense = Expense(
             description=description,
             amount=amount,
-            payer_id=payer_id,
-            group_id=None,
-            )
+            paid_by_id=payer_id,
+            group_id=None
+        )
         db.session.add(expense)
         db.session.flush()
 
-        db.session.add(ExpenseSplit(
-            expense_id=expense.id, user_id=payer_id, amount_owed=payer_share)
-            )
-        db.session.add(ExpenseSplit(
-            expense_id=expense.id,
-            user_id=other_user_id,
-            amount_owed=other_share,
-            ))
+        total_split = 0
+        for user in users:
+            share = float(request.form.get(f"user_{user.id}", 0))
+            split = ExpenseSplit(
+                expense_id=expense.id, user_id=user.id, amount=share)
+            db.session.add(split)
+            total_split += share
+
+        if round(total_split, 2) != round(amount, 2):
+            db.session.rollback()
+            flash("Split must equal total amount", "danger")
+            return redirect(request.url)
 
         db.session.commit()
-        flash("Personal expense added!", "success")
-        return redirect(url_for("dashboard"))
-
-    return render_template("add_personal_expense.html", users=users)
-
-
-@app.route('/history')
-@login_required
-def activity():
-    user_id = session["user_id"]
-
-    # Expenses paid by user
-    paid_expenses = Expense.query.filter_by(paid_by_id=user_id).all()
-
-    # Expenses where user owes (in splits)
-    split_ids = db.session.query(ExpenseSplit.expense_id).filter_by(
-        user_id=user_id).distinct()
-    split_expenses = Expense.query.filter(Expense.id.in_(split_ids)).all()
-
-    # Combine and remove duplicates
-    all_expenses = {exp.id: exp for exp in
-                    paid_expenses + split_expenses}.values()
-
-    # Sort by timestamp descending
-    sorted_expenses = sorted(
-        all_expenses, key=lambda e: e.timestamp, reverse=True)
+        flash("Expense added!", "success")
+        return redirect(url_for("friend_page", friendship_id=friendship_id))
 
     return render_template(
-        "activity.html", expenses=sorted_expenses, user_id=user_id)
+        "add_personal_expense.html", users=users, friendship=friendship)
+
+
+@app.route("/history")
+@login_required
+def activity():
+    user_id = session.get("user_id")
+
+    expenses = Expense.query.filter(
+        (Expense.paid_by_id == user_id) |
+        (Expense.id.in_(
+            db.session.query(ExpenseSplit.expense_id)
+            .filter_by(user_id=user_id)
+        ))
+    ).order_by(Expense.timestamp.desc()).all()
+
+    transactions = []
+    for expense in expenses:
+        group = Group.query.get(expense.group_id) if expense.group_id else None
+        group_name = group.name if group else None
+
+        splits = expense.splits
+        user_split = next((s for s in splits if s.user_id == user_id), None)
+
+        if expense.paid_by_id == user_id:
+            # You paid, others owe you
+            for split in splits:
+                if split.user_id != user_id and split.amount > 0:
+                    counterparty = User.query.get(split.user_id)
+                    transactions.append({
+                        "description": expense.description,
+                        "owed_amount": split.amount,
+                        "counterparty_name": counterparty.name,
+                        "group_name": group_name,
+                        "timestamp": expense.timestamp
+                    })
+
+        elif user_split:
+            # You owe someone
+            payer = User.query.get(expense.paid_by_id)
+            transactions.append({
+                "description": expense.description,
+                "owed_amount": -user_split.amount,
+                "counterparty_name": payer.name,
+                "group_name": group_name,
+                "timestamp": expense.timestamp
+            })
+
+    return render_template("activity.html", transactions=transactions)
 
 
 if __name__ == '__main__':

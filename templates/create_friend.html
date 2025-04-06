@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block title %}Add Friend{% endblock %}
+
+{% block main %}
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="content-container" style="width: 100%; max-width: 500px;">
+        <h3 class="mb-4 text-center">Add a New Friend</h3>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="friend_id" class="form-label">Select User</label>
+                <select class="form-select" name="friend_id" required>
+                    {% for user in users %}
+                        <option value="{{ user.id }}">{{ user.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-success">Add Friend</button>
+                <a href="/" class="btn btn-secondary">Cancel</a>
+            </div>            
+        </form>
+    </div>
+</div>
+{% endblock %}
