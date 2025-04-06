@@ -19,7 +19,7 @@
     <h5 class="mt-4 mb-3">Split Among Members</h5>
     {% for user in users %}
       <div class="mb-2">
-        <label>{{ user.username }}'s Share</label>
+        <label>{{ user.name.strip().split(' ')[0] }}'s Share</label>
         <input type="number" step="0.01" name="user_{{ user.id }}" class="form-control" value="0" required>
       </div>
     {% endfor %}
@@ -28,6 +28,20 @@
     <a href="{{ url_for('group_page', group_id=group.id) }}" class="btn btn-secondary mt-3">Cancel</a>
 
   </form>
+
+  <script>
+    const amountInput = document.getElementById("amount");
+    const splitInputs = document.querySelectorAll(".split-input");
+
+    amountInput.addEventListener("input", () => {
+        const total = parseFloat(amountInput.value) || 0;
+        const share = (total / splitInputs.length).toFixed(2);
+
+        splitInputs.forEach(input => {
+            input.value = share;
+        });
+    });
+  </script>
 </div>
 
 {% endblock %}

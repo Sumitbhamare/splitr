@@ -37,18 +37,29 @@ def index():
     groups = user.groups
 
     # Calculate overall balance
-    all_splits = ExpenseSplit.query.join(Expense).filter(ExpenseSplit.user_id == user_id).all()
-    net_balance = sum(split.paid_share - split.owed_share for split in all_splits)
+    expenses = Expense.query.all()  # Get all expenses (group + non-group)
+    net_balance = 0.0
+    for expense in expenses:
+        # Subtract user's share (what they owe)
+        for split in expense.splits:
+            if split.user_id == user_id:
+                net_balance -= split.amount
+        # Add full expense if user paid
+        if expense.paid_by_id == user_id:
+            net_balance += expense.amount
 
-    # Per-group balances
     group_balances = {}
     for group in groups:
-        group_splits = ExpenseSplit.query \
-            .join(Expense) \
-            .filter(Expense.group_id == group.id, ExpenseSplit.user_id == user_id) \
-            .all()
-
-        balance = sum(split.paid_share - split.owed_share for split in group_splits)
+        expenses = Expense.query.filter_by(group_id=group.id).all()
+        balance = 0.0
+        for expense in expenses:
+            # Subtract user's share (what they owe)
+            for split in expense.splits:
+                if split.user_id == user_id:
+                    balance -= split.amount
+            # Add full expense if the user paid for it
+            if expense.paid_by_id == user_id:
+                balance += expense.amount
         group_balances[group.id] = balance
 
     return render_template(

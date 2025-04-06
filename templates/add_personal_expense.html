@@ -21,7 +21,7 @@
       <select name="other_user_id" class="form-select" required>
         <option value="" disabled selected>Select user</option>
         {% for user in users %}
-          <option value="{{ user.id }}">{{ user.username }}</option>
+          <option value="{{ user.id }}">{{ user.name }}</option>
         {% endfor %}
       </select>
     </div>
@@ -40,6 +40,19 @@
     <button type="submit" class="btn btn-success mt-4">Add Expense</button>
     <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mt-4">Cancel</a>
   </form>
+
+  <script>
+    const amountField = document.getElementById("amount");
+    const youField = document.getElementById("split_you");
+    const friendField = document.getElementById("split_friend");
+
+    amountField.addEventListener("input", () => {
+        const total = parseFloat(amountField.value) || 0;
+        const half = (total / 2).toFixed(2);
+        youField.value = half;
+        friendField.value = half;
+    });
+  </script>
 </div>
 
 {% endblock %}

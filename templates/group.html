@@ -28,7 +28,7 @@
                     <div>
                         <strong>{{ expense.description }}</strong> — ₹{{ expense.amount }}
                         <br>
-                        <small>Added by {{ expense.payer.name }} on {{ expense.timestamp.strftime('%b %d, %Y') }}</small>
+                        <small>Added by {{ expense.paid_by_id }} on {{ expense.timestamp.strftime('%b %d, %Y') }}</small>
                     </div>
                 </li>
             {% endfor %}
