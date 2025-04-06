@@ -39,6 +39,18 @@ body {
     flex-direction: column;
 }
 
+.text-danger-custom {
+    color: var(--danger-color) !important;
+}
+
+.text-success-custom {
+    color: var(--success-color) !important;
+}
+
+.text-muted-custom {
+    color: var(--text-secondary) !important;
+}
+
 /* Navbar */
 .navbar {
     background-color: var(--dark-secondary);

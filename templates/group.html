@@ -10,14 +10,15 @@
             <a href="{{ url_for('add_group_expense', group_id=group.id) }}" class="btn btn-success">+ Add Expense</a>
         </div>
     </div>
-    
 
-    <h5>Members</h5>
-    <ul class="list-group mb-4">
-        {% for member in members %}
-            <li class="list-group-item bg-dark text-light">{{ member.name }} ({{ member.username }})</li>
-        {% endfor %}
-    </ul>
+    <!-- Outstanding balance -->
+    {% if balance < 0 %}
+        <p class="text-danger-custom">You owe ₹{{ -balance | round(2) }}</p>
+    {% elif balance > 0 %}
+        <p class="text-success-custom">You are owed ₹{{ balance | round(2) }}</p>
+    {% else %}
+        <p class="text-secondary-custom">All settled up in this group!</p>
+    {% endif %}
 
     <h5>Expenses</h5>
     {% if expenses %}
@@ -33,7 +34,7 @@
             {% endfor %}
         </ul>
     {% else %}
-        <p class="text-muted">No expenses added yet.</p>
+        <p class="text-muted-custom">No expenses added yet.</p>
     {% endif %}
 </div>
 {% endblock %}

@@ -23,21 +23,41 @@ def execute_query(query, params=()):
     with db.engine.connect() as connection:
         return connection.execute(query, params)
 
-# Home Page
+
 @app.route('/')
 @login_required
 def index():
     if "user_id" not in session:
         flash("Please log in first!", "warning")
         return redirect("/login")
-    
+
     user_id = session.get("user_id")
-
-    # Get all groups where the user is a member
     user = User.query.get(user_id)
-    groups = user.groups  # via backref from group_members table
 
-    return render_template("index.html", groups=groups)
+    groups = user.groups
+
+    # Calculate overall balance
+    all_splits = ExpenseSplit.query.join(Expense).filter(ExpenseSplit.user_id == user_id).all()
+    net_balance = sum(split.paid_share - split.owed_share for split in all_splits)
+
+    # Per-group balances
+    group_balances = {}
+    for group in groups:
+        group_splits = ExpenseSplit.query \
+            .join(Expense) \
+            .filter(Expense.group_id == group.id, ExpenseSplit.user_id == user_id) \
+            .all()
+
+        balance = sum(split.paid_share - split.owed_share for split in group_splits)
+        group_balances[group.id] = balance
+
+    return render_template(
+        "index.html",
+        groups=groups,
+        net_balance=net_balance,
+        group_balances=group_balances
+    )
+
 
 # Register Route
 @app.route('/register', methods=['GET', 'POST'])
@@ -151,7 +171,7 @@ def invite_friends(group_id):
         flash("Friends successfully invited!", "success")
         return redirect("/")
 
-    return render_template('invite_friends.html', group=group, users=users)
+    return render_template('invite_friends.html', group=group, users=users, members=group.users)
 
 
 @app.route('/group/<int:group_id>')
@@ -165,13 +185,19 @@ def group_page(group_id):
         flash("You do not have access to this group.", "danger")
         return redirect("/")
 
-    # List of members
-    members = group.users
-
-    # List of expenses (you may need to adjust depending on your Expense model)
+    # List of expenses
     expenses = Expense.query.filter_by(group_id=group.id).order_by(Expense.timestamp.desc()).all()
 
-    return render_template("group.html", group=group, members=members, expenses=expenses)
+    # Calculate outstanding balance in this group
+    balance = 0.0
+    for expense in expenses:
+        for split in expense.splits:
+            if split.user_id == current_user_id:
+                balance -= split.amount
+        if expense.payer_id == current_user_id:
+            balance += expense.amount
+
+    return render_template("group.html", group=group, expenses=expenses, balance=balance)
 
 
 @app.route("/group/<int:group_id>/add_expense", methods=["GET", "POST"])
@@ -188,7 +214,7 @@ def add_group_expense(group_id):
         # Create Expense record
         expense = Expense(description=description, amount=amount, payer_id=payer_id, group_id=group_id)
         db.session.add(expense)
-        db.session.flush()  # to get expense.id before commit
+        db.session.flush() 
 
         total_split = 0
         for user in users:
@@ -210,14 +236,45 @@ def add_group_expense(group_id):
     return render_template("add_group_expense.html", group=group, users=users)
 
 
-@app.route('/add-expense')
-def add_expense():
-    return redirect("/")
+@app.route("/add_personal_expense", methods=["GET", "POST"])
+def add_personal_expense():
+    current_user_id = session.get("user_id")
+    if not current_user_id:
+        flash("Please log in first.", "danger")
+        return redirect("/login")
 
+    users = User.query.filter(User.id != current_user_id).all()
 
-# @app.route('/groups')
-# def groups():
-#     return redirect("/")
+    if request.method == "POST":
+        description = request.form.get("description")
+        amount = float(request.form.get("amount"))
+        other_user_id = int(request.form.get("other_user_id"))
+        payer_id = current_user_id
+
+        try:
+            payer_share = float(request.form.get("payer_share"))
+            other_share = float(request.form.get("other_share"))
+        except (ValueError, TypeError):
+            flash("Please enter valid share values.", "danger")
+            return redirect(request.url)
+
+        if round(payer_share + other_share, 2) != round(amount, 2):
+            flash("The split amounts must total the expense amount.", "danger")
+            return redirect(request.url)
+
+        # Create personal expense (no group_id)
+        expense = Expense(description=description, amount=amount, payer_id=payer_id, group_id=None)
+        db.session.add(expense)
+        db.session.flush()
+
+        db.session.add(ExpenseSplit(expense_id=expense.id, user_id=payer_id, amount_owed=payer_share))
+        db.session.add(ExpenseSplit(expense_id=expense.id, user_id=other_user_id, amount_owed=other_share))
+
+        db.session.commit()
+        flash("Personal expense added!", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template("add_personal_expense.html", users=users)
 
 
 # @app.route('/history')

@@ -12,7 +12,20 @@
         </div>
     </div>
 
+    <div class="mb-4">
+        {% if net_balance < 0 %}
+            <p class="text-danger fs-5">You owe ₹{{ -net_balance | round(2) }}</p>
+        {% elif net_balance > 0 %}
+        <p class="text-success fs-5">You are owed ₹{{ net_balance | round(2) }}</p>
+        {% else %}
+            <p class="text-muted-custom fs-5">All settled up!</p>
+        {% endif %}
+    </div>
+
+
+    <!-- Group Cards -->
     {% if groups %}
+        <h4 class="mb-3">Your Groups</h4>
         <div class="row">
             {% for group in groups %}
                 <div class="col-md-6 col-lg-4 mb-4">
@@ -20,16 +33,48 @@
                         <div class="card-header">
                             {{ group.name }}
                         </div>
-                        <div class="card-body">
-                            <p class="card-text">Group ID: {{ group.id }}</p>
+                        <div class="card-body">                        
+                            {% set balance = group_balances.get(group.id, 0) %}
+                            {% if balance < 0 %}
+                                <p class="text-danger-custom">You owe ₹{{ -balance | round(2) }}</p>
+                            {% elif balance > 0 %}
+                                <p class="text-success-custom">You are owed ₹{{ balance | round(2) }}</p>
+                            {% else %}
+                                <p class="text-muted-custom">All settled up</p>
+                            {% endif %}                        
                             <a href="{{ url_for('group_page', group_id=group.id) }}" class="btn btn-outline-info btn-sm">View Group</a>
-                        </div>
+                        </div>                        
                     </div>
                 </div>
             {% endfor %}
         </div>
     {% else %}
         <div class="alert alert-secondary">You're not part of any groups yet. Create one to get started!</div>
+    {% endif %}
+
+    <!-- Personal (Non-Group) Expenses -->
+    <hr class="my-4">
+    <h4 class="mb-3">Non-Group Expenses</h4>
+
+    {% if personal_expenses %}
+        <div class="row">
+            {% for expense in personal_expenses %}
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card border-secondary">
+                        <div class="card-header bg-secondary text-white">
+                            {{ expense.description }}
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text mb-1">Amount: ₹{{ expense.amount }}</p>
+                            <p class="card-text text-muted small">You are involved in this transaction</p>
+                            <a href="{{ url_for('view_personal_expense', expense_id=expense.id) }}" class="btn btn-outline-secondary btn-sm">View Details</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-light">You haven't added any personal expenses yet.</div>
     {% endif %}
 
 </div>
