@@ -38,7 +38,7 @@
     <h5 class="mb-3">Current Group Members:</h5>
     <div class="d-flex flex-wrap gap-2">
         {% for member in members %}
-            <span class="badge rounded-pill bg-primary px-3 py-2">{{ member.username }}</span>
+            <span class="badge rounded-pill bg-primary px-3 py-2">{{ member.name.split(" ")[0] }}</span>
         {% endfor %}
     </div>
 </div>

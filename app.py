@@ -172,6 +172,44 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/profile", methods=["GET", "POST"])
+def profile():
+    if "user_id" not in session:
+        flash("You must be logged in to access this page.", "warning")
+        return redirect(url_for("login"))
+
+    user = User.query.get(session["user_id"])
+
+    if request.method == "POST":
+        current_password = request.form.get("current_password")
+        new_password = request.form.get("new_password")
+        confirmation = request.form.get("confirmation")
+
+        # Validate current password
+        if not check_password_hash(user.password, current_password):
+            flash("Current password is incorrect.", "danger")
+            return render_template("profile.html")
+
+        # Check if new password matches confirmation
+        if new_password != confirmation:
+            flash("New password and confirmation do not match.", "danger")
+            return render_template("profile.html")
+
+        # Check if new password is not empty
+        if not new_password:
+            flash("New password cannot be empty.", "danger")
+            return render_template("profile.html")
+
+        # Update password
+        user.password = generate_password_hash(new_password)
+        db.session.commit()
+
+        flash("Password updated successfully.", "success")
+        return redirect("/")
+
+    return render_template("profile.html", user=user)
+
+
 @app.route('/create_group', methods=['GET', 'POST'])
 @login_required
 def create_group():
