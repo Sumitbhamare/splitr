@@ -20,11 +20,11 @@
 
 
     <!-- Group Cards -->
-    {% if groups %}
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="mb-0">Your Group</h4>
-            <a href="/create_group" class="btn btn-success ms-auto">+ New Group</a>
-        </div>    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">Your Groups</h4>
+        <a href="/create_group" class="btn btn-success ms-auto">+ New Group</a>
+    </div>
+    {% if groups %}    
         <div class="row">
             {% for group in groups %}
                 <div class="col-md-6 col-lg-4 mb-4">
