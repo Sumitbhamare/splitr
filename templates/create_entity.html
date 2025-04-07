@@ -13,7 +13,7 @@
                     <select class="form-select" id="{{ field_name }}" name="{{ field_name }}" required>
                         <option disabled selected value="">-- Select a user --</option>
                         {% for user in users %}
-                            <option value="{{ user.id }}">{{ user.name }}</option>
+                            <option value="{{ user.username }}">{{ user.name }}</option>
                         {% endfor %}
                     </select>
                 {% else %}

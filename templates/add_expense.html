@@ -76,7 +76,7 @@
 
     const remaining = (total - sum).toFixed(2);
     const display = document.getElementById("remaining-amount");
-    display.textContent = `Remaining amount to allocate: ${remaining >= 0 ? remaining : 0}`;
+    display.textContent = `Remaining amount to allocate: ${remaining}`;
     display.className = remaining == 0 ? "text-success" : "text-warning";
   }
 

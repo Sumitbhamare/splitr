@@ -270,7 +270,7 @@ def create_group():
 def create_friend():
     """Create a friend connection (friend group with just two users)"""
     if request.method == 'POST':
-        username = request.form.get('friend_username')
+        username = request.form.get('friend_id')
         current_user_id = session.get('user_id')
 
         if not username:
