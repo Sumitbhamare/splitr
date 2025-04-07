@@ -17,6 +17,41 @@
             <p class="text-muted-custom fs-5">All settled up!</p>
         {% endif %}
     </div>
+
+    <div class="alert alert-info mt-4">
+        💡 Tip: Keep your balances in check by settling up often. Click on a group or friend to view transactions.
+    </div>
+
+    <div class="mb-4">
+        <h4>Summary</h4>
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <div class="card text-center shadow-sm">
+              <div class="card-body">
+                <h5 class="card-title">Groups</h5>
+                <p class="card-text fs-4">{{ num_groups }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <div class="card text-center shadow-sm">
+              <div class="card-body">
+                <h5 class="card-title">Friends</h5>
+                <p class="card-text fs-4">{{ num_friends }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <div class="card text-center shadow-sm">
+              <div class="card-body">
+                <h5 class="card-title">Total Spent</h5>
+                <p class="card-text fs-4">{{ currency(total_spent) }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    
     
 </div>
 {% endblock %}

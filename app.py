@@ -44,8 +44,20 @@ def index():
         return redirect("/logout")
 
     net_balance = user.balance()
+    friend_groups = [
+        g for g in user.groups if g.is_friend_group and len(g.users) == 2
+    ]
+    num_friends = len(friend_groups)
+    num_groups = len([g for g in user.groups if not g.is_friend_group])
+    total_spent = sum(exp.amount for exp in user.expenses_paid)
 
-    return render_template("index.html", net_balance=net_balance)
+    return render_template(
+        "index.html",
+        net_balance=net_balance,
+        num_groups=num_groups,
+        num_friends=num_friends,
+        total_spent=total_spent
+    )
 
 
 @app.route("/groups")

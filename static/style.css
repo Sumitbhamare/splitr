@@ -92,6 +92,7 @@ body {
     background-color: var(--dark-tertiary);
     border: none;
     margin-bottom: 20px;
+    color: var(--text-secondary);
 }
 
 .card-header {
@@ -100,8 +101,21 @@ body {
     font-weight: 500;
 }
 
-.card-text {
-    color: var(--text-secondary);
+.card-title {
+    color: var(--text-primary); 
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.card-text,
+.card-body,
+.card .display-6 {
+    color: var(--text-secondary); 
+}
+
+.card-title {
+    font-weight: 600;
+    margin-bottom: 10px;
 }
 
 /* Buttons */
