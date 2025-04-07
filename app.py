@@ -3,8 +3,7 @@ from flask import request, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_session import Session
 
-from models import (
-    db, User, Group, GroupMember, Expense, ExpenseSplit, Friendship)
+from models import db, User, Group, GroupMember, Expense, ExpenseSplit
 from helper import login_required, currency
 import os
 
@@ -40,72 +39,73 @@ def index():
 
     user_id = session.get("user_id")
     user = User.query.get(user_id)
+    if user is None:
+        flash("User not found. Please log in again.", "danger")
+        return redirect("/logout")
 
-    # GROUPS SECTION
-    groups = user.groups
-    net_balance = 0.0
-    group_balances = {}
+    net_balance = user.balance()
 
-    for group in groups:
-        expenses = Expense.query.filter_by(group_id=group.id).all()
-        balance = 0.0
-        for expense in expenses:
-            for split in expense.splits:
-                if split.user_id == user_id:
-                    balance -= split.amount
-            if expense.paid_by_id == user_id:
-                balance += expense.amount
-        group_balances[group.id] = balance
-        net_balance += balance
+    return render_template("index.html", net_balance=net_balance)
 
-    # FRIENDS SECTION
-    friendships = Friendship.query.filter(
-        (Friendship.user1_id == user_id) | (Friendship.user2_id == user_id)
-    ).all()
 
-    friends = []
-    friend_balances = {}
-    friendship_ids = {}
+@app.route("/groups")
+@login_required
+def groups_page():
+    user_id = session.get("user_id")
+    user = User.query.get(user_id)
 
-    for friendship in friendships:
-        other = friendship.other_user(user_id)
-        friends.append(other)
-        friendship_ids[other.id] = friendship.id
-
-        # Get personal (non-group) expenses involving both users
-        expenses = (
-            Expense.query
-            .filter_by(group_id=None)
-            .filter(
-                (Expense.paid_by_id == user_id) |
-                (Expense.paid_by_id == other.id)
-            )
-            .order_by(Expense.timestamp.desc())
-            .all()
-        )
-
-        # Filter to expenses involving both
-        balance = 0.0
-        for expense in expenses:
-            user_ids = {split.user_id for split in expense.splits}
-            if {user_id, other.id}.issubset(user_ids):
-                for split in expense.splits:
-                    if split.user_id == user_id:
-                        balance -= split.amount
-                if expense.paid_by_id == user_id:
-                    balance += expense.amount
-
-        friend_balances[other.id] = balance
-        net_balance += balance
+    groups = [g for g in user.groups if not g.is_friend_group]
+    entries = [
+        {
+            "id": g.id,
+            "name": g.name,
+            "balance": g.get_user_balance(user_id)
+        }
+        for g in groups
+    ]
 
     return render_template(
-        "index.html",
-        groups=groups,
-        net_balance=net_balance,
-        group_balances=group_balances,
-        friends=friends,
-        friend_balances=friend_balances,
-        friendship_ids=friendship_ids,
+        "entities_list.html",
+        title="Groups",
+        header="Your Groups",
+        action_url="/create_group",
+        action_text="+ New Group",
+        entries=entries,
+        is_friend_view=False,
+        empty_message="You're not part of any groups yet. \
+            Create one to get started!"
+    )
+
+
+@app.route("/friends")
+@login_required
+def friends_page():
+    user_id = session.get("user_id")
+    user = User.query.get(user_id)
+
+    friend_groups = [
+        g for g in user.groups if g.is_friend_group and len(g.users) == 2
+    ]
+
+    entries = []
+    for group in friend_groups:
+        friend = next(u for u in group.users if u.id != user_id)
+        entries.append({
+            "id": group.id,
+            "name": friend.name,
+            "balance": group.get_user_balance(user_id)
+        })
+
+    return render_template(
+        "entities_list.html",
+        title="Friends",
+        header="Your Friends",
+        action_url="/create_friend",
+        action_text="+ Add New Friend",
+        entries=entries,
+        is_friend_view=True,
+        empty_message="You don't have any friends added yet. \
+            Add one to get started!"
     )
 
 
@@ -157,7 +157,7 @@ def login():
 
         if user and check_password_hash(user.password, password):
             session["user_id"] = user.id
-            session["username"] = user.username
+            session["name"] = user.name
             flash("Login successful!", "success")
             return redirect("/")
         else:
@@ -226,6 +226,20 @@ def create_group():
             flash("Group name cannot be empty.", "danger")
             return redirect('/create_group')
 
+        # Check duplicate
+        existing_group = (
+            db.session.query(Group)
+            .join(GroupMember, Group.id == GroupMember.group_id)
+            .filter(Group.name == group_name,
+                    GroupMember.user_id == current_user_id,
+                    not Group.is_friend_group)
+            .first()
+        )
+
+        if existing_group:
+            flash("You already have a group with this name.", "warning")
+            return redirect('/create_group')
+
         # Create new group
         new_group = Group(name=group_name)
         db.session.add(new_group)
@@ -238,54 +252,84 @@ def create_group():
         db.session.commit()
 
         flash(f'Group "{group_name}" created successfully!', "success")
-        return redirect("/")
+        return redirect("/groups")
 
-    return render_template('create_group.html')
+    return render_template(
+        'create_entity.html',
+        title="Create Group",
+        header="Create a New Group",
+        label="Group Name",
+        field_name="group_name",
+        button_text="Create Group",
+        cancel_url="/groups"
+    )
 
 
-@app.route("/create_friend", methods=["GET", "POST"])
+@app.route('/create_friend', methods=['GET', 'POST'])
 @login_required
 def create_friend():
-    """Create a new group with another user"""
-    current_user_id = session["user_id"]
-    all_users = User.query.filter(User.id != current_user_id).all()
+    """Create a friend connection (friend group with just two users)"""
+    if request.method == 'POST':
+        username = request.form.get('friend_username')
+        current_user_id = session.get('user_id')
 
-    # Get existing friendships
-    existing_friend_ids = set()
-    for f in Friendship.query.all():
-        if f.user1_id == current_user_id:
-            existing_friend_ids.add(f.user2_id)
-        elif f.user2_id == current_user_id:
-            existing_friend_ids.add(f.user1_id)
+        if not username:
+            flash("Please enter a friend's username.", "danger")
+            return redirect('/create_friend')
 
-    # Filter out already-friends
-    available_users = [u for u in all_users if u.id not in existing_friend_ids]
+        # Check if the user exists
+        friend = User.query.filter_by(username=username).first()
+        if not friend:
+            flash("No user with that username found.", "danger")
+            return redirect('/create_friend')
 
-    if request.method == "POST":
-        selected_id = int(request.form.get("friend_id"))
+        if friend.id == current_user_id:
+            flash("You cannot add yourself as a friend.", "danger")
+            return redirect('/create_friend')
 
-        # Prevent duplicate
-        already_friends = Friendship.query.filter(
-            ((Friendship.user1_id == current_user_id) &
-             (Friendship.user2_id == selected_id)) |
-            ((Friendship.user1_id == selected_id) &
-             (Friendship.user2_id == current_user_id))
-        ).first()
+        # Check if a friend group already exists between the two users
+        existing_friend_group = (
+            db.session.query(Group)
+            .join(Group.users)
+            .filter(Group.is_friend_group)
+            .filter(Group.users.any(id=current_user_id))
+            .filter(Group.users.any(id=friend.id))
+            .first()
+        )
 
-        if already_friends:
-            flash("You're already friends with this user.", "warning")
-            return redirect("/")
+        if existing_friend_group:
+            flash("You're already friends with this user.", "info")
+            return redirect('/friends')
 
-        new_friendship = Friendship(
-            user1_id=current_user_id, user2_id=selected_id)
-        db.session.add(new_friendship)
+        # Create a new friend group
+        new_friend_group = Group(name=None, is_friend_group=True)
+        db.session.add(new_friend_group)
         db.session.commit()
 
-        flash("Friend added successfully!", "success")
-        return redirect(
-            url_for('friend_page', friendship_id=new_friendship.id))
+        # Add both users to the group
+        db.session.add_all([
+            GroupMember(user_id=current_user_id, group_id=new_friend_group.id),
+            GroupMember(user_id=friend.id, group_id=new_friend_group.id)
+        ])
+        db.session.commit()
 
-    return render_template("create_friend.html", users=available_users)
+        flash(f"You are now friends with {friend.name}!", "success")
+        return redirect('/friends')
+
+    # For GET request: get all users except current one
+    current_user_id = session.get("user_id")
+    all_users = User.query.filter(User.id != current_user_id).all()
+
+    return render_template(
+        "create_entity.html",
+        title="Add Friend",
+        header="Add a New Friend",
+        label="Select a Friend",
+        field_name="friend_id",
+        button_text="Add Friend",
+        cancel_url="/friends",
+        users=all_users
+    )
 
 
 @app.route('/invite-friends/<int:group_id>', methods=['GET', 'POST'])
@@ -309,7 +353,7 @@ def invite_friends(group_id):
 
         db.session.commit()
         flash("Friends successfully invited!", "success")
-        return redirect("/")
+        return redirect("/groups")
 
     return render_template(
         'invite_friends.html', group=group, users=users, members=group.users)
@@ -320,74 +364,41 @@ def invite_friends(group_id):
 def group_page(group_id):
     """Group page showing expenses and balance"""
     group = Group.query.get_or_404(group_id)
+    current_user_id = session.get("user_id")
 
     # Ensure current user is a member
-    current_user_id = session.get("user_id")
-    if current_user_id not in [u.id for u in group.users]:
+    if not group.user_is_member(current_user_id):
         flash("You do not have access to this group.", "danger")
-        return redirect("/")
+        return redirect("/groups")
 
-    # List of expenses
-    expenses = Expense.query.filter_by(group_id=group.id).order_by(
-        Expense.timestamp.desc()).all()
-
-    # Calculate outstanding balance in this group
-    balance = 0.0
-    for expense in expenses:
-        for split in expense.splits:
-            if split.user_id == current_user_id:
-                balance -= split.amount
-        if expense.paid_by_id == current_user_id:
-            balance += expense.amount
+    expenses = group.get_group_expenses()
+    balance = group.get_user_balance(current_user_id)
 
     return render_template(
         "group.html", group=group, expenses=expenses, balance=balance)
 
 
-@app.route("/friend/<int:friendship_id>")
+@app.route('/friend/<int:group_id>')
 @login_required
-def friend_page(friendship_id):
-    """Friendship page showing expenses and balance"""
-    friendship = Friendship.query.get_or_404(friendship_id)
-    current_user_id = session["user_id"]
+def friend_page(group_id):
+    """Page showing expenses and balance with a specific friend"""
+    group = Group.query.get_or_404(group_id)
+    current_user_id = session.get("user_id")
 
-    # Ensure access
-    if not friendship.involves_user(current_user_id):
-        flash("You do not have access to this friend.", "danger")
-        return redirect("/")
-    other_user = friendship.other_user(current_user_id)
+    if not group.user_is_member(current_user_id) or not group.is_friend_group:
+        flash("You do not have access to this friend view.", "danger")
+        return redirect("/friends")
 
-    expenses = (
-        Expense.query
-        .filter_by(group_id=None)
-        .filter(
-            (Expense.paid_by_id == current_user_id) |
-            (Expense.paid_by_id == other_user.id)
-        )
-        .order_by(Expense.timestamp.desc())
-        .all()
-    )
-
-    # Filter to expenses involving both users
-    filtered_expenses = []
-    balance = 0.0
-
-    for expense in expenses:
-        user_ids_involved = {split.user_id for split in expense.splits}
-        if {current_user_id, other_user.id}.issubset(user_ids_involved):
-            filtered_expenses.append(expense)
-            for split in expense.splits:
-                if split.user_id == current_user_id:
-                    balance -= split.amount
-            if expense.paid_by_id == current_user_id:
-                balance += expense.amount
+    expenses = group.get_group_expenses()
+    balance = group.get_user_balance(current_user_id)
+    friend = next(user for user in group.users if user.id != current_user_id)
 
     return render_template(
         "friend.html",
-        friendship=friendship,
-        other_user=other_user,
-        expenses=filtered_expenses,
-        balance=balance,
+        group=group,
+        friend=friend,
+        expenses=expenses,
+        balance=balance
     )
 
 
@@ -395,13 +406,16 @@ def friend_page(friendship_id):
 def add_group_expense(group_id):
     """Add an expense to a group"""
     group = Group.query.get_or_404(group_id)
-    members = GroupMember.query.filter_by(group_id=group_id).all()
-    users = [db.session.get(User, member.user_id) for member in members]
+    users = group.users
 
     if request.method == "POST":
-        description = request.form.get("description")
-        amount = float(request.form.get("amount"))
-        payer_id = int(request.form.get("paid_by"))
+        try:
+            description = request.form["description"]
+            amount = round(float(request.form["amount"]), 2)
+            payer_id = int(request.form["paid_by"])
+        except (KeyError, ValueError):
+            flash("Invalid input for expense fields.", "danger")
+            return redirect(request.url)
 
         # Create Expense record
         expense = Expense(
@@ -409,78 +423,25 @@ def add_group_expense(group_id):
             amount=amount,
             paid_by_id=payer_id,
             group_id=group_id,
-            )
+        )
         db.session.add(expense)
         db.session.flush()
 
-        total_split = 0
-        for user in users:
-            share = float(request.form.get(f"user_{user.id}", 0))
-            if share > 0:
-                split = ExpenseSplit(
-                    expense_id=expense.id, user_id=user.id, amount=share)
-                db.session.add(split)
-                total_split += share
+        total_split = expense.add_splits_from_form(request.form, users)
 
-        if round(total_split, 2) != round(amount, 2):
+        if round(total_split, 2) != amount:
             db.session.rollback()
             flash("Split amounts must add up to the total expense.", "danger")
             return redirect(request.url)
 
         db.session.commit()
         flash("Expense added successfully!", "success")
-        return redirect(url_for("group_page", group_id=group_id))
+        # Redirect based on group type
+        if group.is_friend_group:
+            return redirect(url_for("friend_page", group_id=group.id))
+        return redirect(url_for("group_page", group_id=group.id))
 
-    return render_template("add_group_expense.html", group=group, users=users)
-
-
-@app.route("/friend/<int:friendship_id>/add_expense", methods=["GET", "POST"])
-@login_required
-def add_friend_expense(friendship_id):
-    """Add an expense between two friends"""
-    friendship = Friendship.query.get_or_404(friendship_id)
-    current_user_id = session["user_id"]
-
-    if not friendship.involves_user(current_user_id):
-        flash("Unauthorized", "danger")
-        return redirect("/")
-
-    other_user = friendship.other_user(current_user_id)
-    users = [db.session.get(User, current_user_id), other_user]
-
-    if request.method == "POST":
-        description = request.form.get("description")
-        amount = float(request.form.get("amount"))
-        payer_id = int(request.form.get("paid_by"))
-
-        expense = Expense(
-            description=description,
-            amount=amount,
-            paid_by_id=payer_id,
-            group_id=None
-        )
-        db.session.add(expense)
-        db.session.flush()
-
-        total_split = 0
-        for user in users:
-            share = float(request.form.get(f"user_{user.id}", 0))
-            split = ExpenseSplit(
-                expense_id=expense.id, user_id=user.id, amount=share)
-            db.session.add(split)
-            total_split += share
-
-        if round(total_split, 2) != round(amount, 2):
-            db.session.rollback()
-            flash("Split must equal total amount", "danger")
-            return redirect(request.url)
-
-        db.session.commit()
-        flash("Expense added!", "success")
-        return redirect(url_for("friend_page", friendship_id=friendship_id))
-
-    return render_template(
-        "add_personal_expense.html", users=users, friendship=friendship)
+    return render_template("add_expense.html", group=group, users=users)
 
 
 @app.route("/history")
@@ -536,29 +497,23 @@ def activity():
            methods=["GET", "POST"])
 @login_required
 def edit_group_expense(group_id, expense_id):
-    """Edit an existing group expense"""
+    """Edit an existing group or friend expense"""
     group = Group.query.get_or_404(group_id)
     expense = Expense.query.get_or_404(expense_id)
-    members = GroupMember.query.filter_by(group_id=group_id).all()
-    users = [db.session.get(User, member.user_id) for member in members]
+
+    # Ensure expense belongs to the group
+    if expense.group_id != group.id:
+        flash("Expense does not belong to this group.", "danger")
+        return redirect(url_for("group_page", group_id=group.id))
+
+    members = group.users
 
     if request.method == "POST":
         expense.description = request.form.get("description")
         expense.amount = float(request.form.get("amount"))
         expense.paid_by_id = int(request.form.get("paid_by"))
 
-        # Delete old splits
-        ExpenseSplit.query.filter_by(expense_id=expense.id).delete()
-
-        # Add updated splits
-        total_split = 0
-        for user in users:
-            share = float(request.form.get(f"user_{user.id}", 0))
-            if share > 0:
-                split = ExpenseSplit(
-                    expense_id=expense.id, user_id=user.id, amount=share)
-                db.session.add(split)
-                total_split += share
+        total_split = expense.update_splits_from_form(request.form, members)
 
         if round(total_split, 2) != round(expense.amount, 2):
             db.session.rollback()
@@ -567,15 +522,18 @@ def edit_group_expense(group_id, expense_id):
 
         db.session.commit()
         flash("Expense updated successfully!", "success")
-        return redirect(url_for("group_page", group_id=group_id))
 
-    # Prefill form
+        # Redirect based on group type
+        if group.is_friend_group:
+            return redirect(url_for("friend_page", group_id=group.id))
+        return redirect(url_for("group_page", group_id=group.id))
+
     user_splits = {split.user_id: split.amount for split in expense.splits}
 
     return render_template(
-        "add_group_expense.html",
+        "add_expense.html",
         group=group,
-        users=users,
+        users=members,
         expense=expense,
         user_splits=user_splits
     )
@@ -586,108 +544,22 @@ def edit_group_expense(group_id, expense_id):
 @login_required
 def delete_group_expense(group_id, expense_id):
     """Delete an expense from a group"""
+    group = Group.query.get_or_404(group_id)
     expense = Expense.query.get_or_404(expense_id)
 
-    # Delete splits first (due to FK constraints)
+    if expense.group_id != group_id:
+        flash("Expense does not belong to this group.", "danger")
+        return redirect(url_for("group_page", group_id=group_id))
+
     ExpenseSplit.query.filter_by(expense_id=expense.id).delete()
     db.session.delete(expense)
     db.session.commit()
 
     flash("Expense deleted successfully!", "success")
-    return redirect(url_for("group_page", group_id=group_id))
-
-
-@app.route("/friend/<int:friend_id>/expense/<int:expense_id>/edit",
-           methods=["GET", "POST"])
-@login_required
-def edit_friend_expense(friend_id, expense_id):
-    """Edit an existing personal expense"""
-    friendship = Friendship.query.get_or_404(friend_id)
-    current_user_id = session["user_id"]
-
-    other_user = friendship.other_user(current_user_id)
-    users = [db.session.get(User, current_user_id), other_user]
-
-    # Get the expense to edit
-    expense = Expense.query.get_or_404(expense_id)
-
-    # Validate ownership of expense (optional security step)
-    involved_user_ids = [split.user_id for split in expense.splits]
-    if current_user_id not in involved_user_ids and \
-            expense.paid_by_id != current_user_id:
-        flash("You don't have access to edit this expense.", "danger")
-        return redirect(url_for("friend_page", friend_id=friend_id))
-
-    if request.method == "POST":
-        description = request.form.get("description")
-        amount = float(request.form.get("amount"))
-        paid_by_id = int(request.form.get("paid_by"))
-
-        # Update expense
-        expense.description = description
-        expense.amount = amount
-        expense.paid_by_id = paid_by_id
-
-        # Remove old splits
-        ExpenseSplit.query.filter_by(expense_id=expense.id).delete()
-
-        # Add new splits
-        total_split = 0
-        for user in users:
-            share = float(request.form.get(f"user_{user.id}", 0))
-            if share > 0:
-                split = ExpenseSplit(
-                    expense_id=expense.id,
-                    user_id=user.id,
-                    amount=share
-                )
-                db.session.add(split)
-                total_split += share
-
-        if round(total_split, 2) != round(amount, 2):
-            db.session.rollback()
-            flash("Split amounts must match total expense.", "danger")
-            return redirect(request.url)
-
-        db.session.commit()
-        flash("Expense updated successfully!", "success")
-        return redirect(url_for("friend_page", friendship_id=friend_id))
-
-    # Pre-fill user_splits
-    user_splits = {split.user_id: split.amount for split in expense.splits}
-
-    return render_template(
-        "add_personal_expense.html",
-        users=users,
-        friendship=friendship,
-        expense=expense,
-        user_splits=user_splits
-    )
-
-
-@app.route("/friend/<int:friend_id>/expense/<int:expense_id>/delete",
-           methods=["POST"])
-@login_required
-def delete_friend_expense(friend_id, expense_id):
-    """Delete an expense between friends"""
-    expense = Expense.query.get_or_404(expense_id)
-
-    # Optional: Ensure current user has a link to the expense
-    current_user_id = session["user_id"]
-    involved = current_user_id == expense.paid_by_id or any(
-        split.user_id == current_user_id for split in expense.splits
-    )
-    if not involved:
-        flash("You cannot delete this expense.", "danger")
-        return redirect(url_for("friend_page", friend_id=friend_id))
-
-    # Delete splits first, then the expense
-    ExpenseSplit.query.filter_by(expense_id=expense.id).delete()
-    db.session.delete(expense)
-    db.session.commit()
-
-    flash("Expense deleted successfully.", "info")
-    return redirect(url_for("friend_page", friend_id=friend_id))
+    # Redirect based on group type
+    if group.is_friend_group:
+        return redirect(url_for("friend_page", group_id=group.id))
+    return redirect(url_for("group_page", group_id=group.id))
 
 
 if __name__ == '__main__':

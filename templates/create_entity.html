@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block main %}
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="content-container" style="width: 100%; max-width: 500px;">
+        <h2 class="mb-4 text-center">{{ header }}</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="{{ field_name }}" class="form-label">{{ label }}</label>
+            
+                {% if users is defined %}
+                    <select class="form-select" id="{{ field_name }}" name="{{ field_name }}" required>
+                        <option disabled selected value="">-- Select a user --</option>
+                        {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.name }}</option>
+                        {% endfor %}
+                    </select>
+                {% else %}
+                    <input type="text" class="form-control" id="{{ field_name }}" name="{{ field_name }}" required>
+                {% endif %}
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-success">{{ button_text }}</button>
+                <a href="{{ cancel_url }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

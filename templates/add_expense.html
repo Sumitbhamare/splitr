@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+{% block title %}{{ 'Edit Expense' if expense else 'Add Expense' }}{% endblock %}
+
+{% block main %}
+<div class="container content-container">
+  <h3 class="mb-4">{{ 'Edit Expense' if expense else 'Add Expense' }}
+    {% if group %}to {{ group.name }}{% elif friend %}with {{ friend.name.split(' ')[0] }}{% endif %}
+  </h3>
+  <form method="POST">
+    <div class="mb-3">
+      <label for="description" class="form-label">Description</label>
+      <input type="text" class="form-control" name="description"
+             value="{{ expense.description if expense else '' }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="amount" class="form-label">Total Amount</label>
+      <input type="number" class="form-control" name="amount" id="amount" step="0.01"
+             value="{{ expense.amount if expense else '' }}" required oninput="updateRemaining()">
+    </div>
+    <div class="mb-3">
+      <label for="paid_by" class="form-label">Paid By</label>
+      <select class="form-select" name="paid_by" id="paid_by" required>
+        {% for user in users %}
+          <option value="{{ user.id }}" {% if expense and expense.paid_by_id == user.id %}selected{% endif %}>
+            {{ user.name.split(" ")[0] }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <h5 class="mt-4 mb-2">Split Among Members</h5>
+
+    <p id="remaining-amount" class="text-warning">Remaining amount to allocate: 0.00</p>
+    <button type="button" class="btn btn-outline-primary btn-sm mb-3" onclick="splitEvenly()">Split Evenly</button>
+
+    {% for user in users %}
+      <div class="mb-2">
+        <label>{{ user.name.split(' ')[0] }}'s Share</label>
+        <input type="number" step="0.01" name="user_{{ user.id }}"
+               value="{{ user_splits.get(user.id, '') if user_splits else '' }}"
+               class="form-control split-input" required oninput="updateRemaining()">
+      </div>
+    {% endfor %}
+
+    <button type="submit" class="btn btn-success mt-3">{{ 'Update Expense' if expense else 'Add Expense' }}</button>
+    <a href="{{ url_for('group_page', group_id=group.id) if group else url_for('friend_page', group_id=group.id) }}"
+   class="btn btn-secondary mt-3">Cancel</a>
+  </form>
+</div>
+
+<script>
+  function splitEvenly() {
+    const amount = parseFloat(document.getElementById("amount").value) || 0;
+    const inputs = document.querySelectorAll(".split-input");
+    const n = inputs.length;
+    if (n === 0 || amount <= 0) return;
+
+    let share = Math.floor((amount / n) * 100) / 100;
+    let totalAssigned = share * n;
+    let remainder = +(amount - totalAssigned).toFixed(2);
+
+    inputs.forEach((input, index) => {
+      input.value = (index === 0 ? (share + remainder) : share).toFixed(2);
+    });
+
+    updateRemaining();
+  }
+
+  function updateRemaining() {
+    const total = parseFloat(document.getElementById("amount").value) || 0;
+    const inputs = document.querySelectorAll(".split-input");
+    let sum = 0;
+
+    inputs.forEach(input => {
+      sum += parseFloat(input.value) || 0;
+    });
+
+    const remaining = (total - sum).toFixed(2);
+    const display = document.getElementById("remaining-amount");
+    display.textContent = `Remaining amount to allocate: ${remaining >= 0 ? remaining : 0}`;
+    display.className = remaining == 0 ? "text-success" : "text-warning";
+  }
+
+  document.addEventListener("DOMContentLoaded", updateRemaining);
+</script>
+{% endblock %}

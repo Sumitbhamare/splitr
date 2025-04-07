@@ -1,85 +1,22 @@
-{% extends "layout.html" %}
+{% extends "layout.html" %} 
 {% block title %}Dashboard{% endblock %}
 
 {% block main %}
 <div class="container-fluid py-4">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">Welcome, {{ session["username"] }}!</h2>
+        <h2 class="mb-0">Welcome, {{ session["name"] }}!</h2>
     </div>
 
     <div class="mb-4">
         {% if net_balance < 0 %}
             <p class="text-danger fs-5">You owe {{ currency(-net_balance) }}</p>
         {% elif net_balance > 0 %}
-        <p class="text-success fs-5">You are owed {{ currency(net_balance) }}</p>
+            <p class="text-success fs-5">You are owed {{ currency(net_balance) }}</p>
         {% else %}
             <p class="text-muted-custom fs-5">All settled up!</p>
         {% endif %}
     </div>
-
-
-    <!-- Group Cards -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Your Groups</h4>
-        <a href="/create_group" class="btn btn-success ms-auto">+ New Group</a>
-    </div>
-    {% if groups %}    
-        <div class="row">
-            {% for group in groups %}
-                <div class="col-md-6 col-lg-4 mb-4">
-                    <div class="card">
-                        <div class="card-header">
-                            {{ group.name }}
-                        </div>
-                        <div class="card-body">                        
-                            {% set balance = group_balances.get(group.id, 0) %}
-                            {% if balance < 0 %}
-                                <p class="text-danger-custom">You owe {{ currency(-balance) }}</p>
-                            {% elif balance > 0 %}
-                                <p class="text-success-custom">You are owed {{ currency(balance) }}</p>
-                            {% else %}
-                                <p class="text-muted-custom">All settled up</p>
-                            {% endif %}                        
-                            <a href="{{ url_for('group_page', group_id=group.id) }}" class="btn btn-outline-info btn-sm">View Group</a>
-                        </div>                        
-                    </div>
-                </div>
-            {% endfor %}
-        </div>
-    {% else %}
-        <div class="alert alert-secondary">You're not part of any groups yet. Create one to get started!</div>
-    {% endif %}
-
-    <!-- Personal (Non-Group) Expenses -->
-    <hr class="my-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Your Friends</h4>
-        <a href="/create_friend" class="btn btn-success ms-auto">+ Add New Friend</a>
-    </div>    
-    <div class="row">
-        {% for friend in friends %}
-            <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card">
-                    <div class="card-header">
-                        {{ friend.name }}
-                    </div>
-                    <div class="card-body">
-                        {% set balance = friend_balances[friend.id] %}
-                        {% if balance < 0 %}
-                            <p class="text-danger-custom">You owe {{ currency(-balance) }}</p>
-                        {% elif balance > 0 %}
-                            <p class="text-success-custom">You are owed {{ currency(balance) }}</p>
-                        {% else %}
-                            <p class="text-muted-custom">All settled up</p>
-                        {% endif %}
-                        <a href="{{ url_for('friend_page', friendship_id=friendship_ids[friend.id]) }}" class="btn btn-outline-info btn-sm">View</a>
-                    </div>
-                </div>
-            </div>
-        {% endfor %}
-    </div>
-
-
+    
 </div>
 {% endblock %}
