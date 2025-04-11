@@ -1,3 +1,5 @@
+/* Written using AI for Bootstrap functionality and classes */
+
 :root {
     --dark-bg: #121212;
     --dark-secondary: #1e1e1e;
@@ -184,20 +186,4 @@ body {
     background-color: rgba(207, 102, 121, 0.2);
     color: var(--danger-color);
     border: 1px solid var(--danger-color);
-}
-
-/* Tables */
-.table {
-    color: var(--text-primary);
-}
-
-.table td,
-.table th {
-    border-color: #444;
-}
-
-/* Horizontal Rule */
-hr {
-    border-color: #444;
-    opacity: 0.5;
 }
